@@ -53,7 +53,7 @@ func (m *ConnManager) Foreach(f func(k, v interface{})) {
 }
 
 // send message to one websocket connection
-func (m *ConnManager) Send(k, msg *Message) {
+func (m *ConnManager) Send(k string, msg *Message) {
 	v, ok := m.Get(k)
 	if ok {
 		if conn, ok := v.(*websocket.Conn); ok {
@@ -69,7 +69,7 @@ func (m *ConnManager) Send(k, msg *Message) {
 }
 
 // send message to multi websocket connections
-func (m *ConnManager) SendMulti(keys []*Message, msg interface{}) {
+func (m *ConnManager) SendMulti(keys []string, msg interface{}) {
 	for _, k := range keys {
 		v, ok := m.Get(k)
 		if ok {
@@ -159,6 +159,19 @@ func doConnected(conn *websocket.Conn) (string, error) {
 	}
 	CManager.Broadcast(conn, msg)
 
+	// add to last message store
+	LastMessage.Add(msg)
+
+	// send recent message
+	err = LastMessage.Foreach(func(msg *Message) {
+		if err := websocket.JSON.Send(conn, msg); err != nil {
+			fmt.Println("Send msg error: ", err)
+		}
+	})
+	if err != nil {
+		fmt.Println("send recent message error: ", err)
+	}
+
 	return userId, nil
 }
 
@@ -177,6 +190,9 @@ func doDisConnected(userId string, conn *websocket.Conn) error {
 	}
 	CManager.Broadcast(conn, msg)
 
+	// add to last message store
+	LastMessage.Add(msg)
+
 	return nil
 }
 
@@ -188,6 +204,9 @@ func doReceived(conn *websocket.Conn, msg *Message) error {
 
 	// broadcast message to all websocket connections
 	CManager.Broadcast(conn, msg)
+
+	// add to last message store
+	LastMessage.Add(msg)
 
 	return nil
 }
